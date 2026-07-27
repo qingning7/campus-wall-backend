@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import { Prisma } from "../../generated/prisma/client.js"
 import { prisma } from "../lib/prisma.js"
 import jwt from "jsonwebtoken"
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth.middleware.js"
 
 export const authRouter = Router()
 
@@ -120,5 +121,32 @@ authRouter.post("/login", async (req, res) => {
                 createdAt: user.createdAt
             }
         }
+    })
+})
+
+authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const user = await prisma.user.findUnique({
+        where: {
+            id: req.user!.id
+        },
+        select: {
+            id: true,
+            email: true,
+            name: true,
+            schoolId: true,
+            createdAt: true
+        }
+    })
+
+    if (!user) {
+        return res.status(404).json({
+            ok: false,
+            message: "User not found"
+        })
+    }
+
+    res.json({
+        ok: true,
+        data: user
     })
 })
