@@ -2,6 +2,7 @@ import { Router } from "express"
 import bcrypt from "bcryptjs"
 import { Prisma } from "../../generated/prisma/client.js"
 import { prisma } from "../lib/prisma.js"
+import jwt from "jsonwebtoken"
 
 export const authRouter = Router()
 
@@ -91,14 +92,33 @@ authRouter.post("/login", async (req, res) => {
         })
     }
 
+    const jwtSecret = process.env.JWT_SECRET
+
+    if (!jwtSecret) {
+        throw new Error("JWT_SECRET is not set")
+    }
+
+    const token = jwt.sign(
+        {
+            userId: user.id
+        },
+        jwtSecret,
+        {
+            expiresIn: "7d"
+        }
+    )
+
     res.json({
         ok: true,
         data: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            schoolId: user.schoolId,
-            createdAt: user.createdAt
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                schoolId: user.schoolId,
+                createdAt: user.createdAt
+            }
         }
     })
 })
