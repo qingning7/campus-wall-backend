@@ -47,5 +47,7 @@ schoolRouter.post("/", async (req, res) => {
                 message: "School name already exists"
             })
         }
+
+        throw error
     }
 })
