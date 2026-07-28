@@ -19,8 +19,9 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
 
-  schoolId String?
-  school   School? @relation(fields: [schoolId], references: [id])
+  schoolId     String?
+  school       School?       @relation(fields: [schoolId], references: [id])
+  chatMessages ChatMessage[]
 }
 
 model School {
@@ -28,5 +29,18 @@ model School {
   name      String   @unique
   createdAt DateTime @default(now())
 
-  users User[]
+  users        User[]
+  chatMessages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
 }
