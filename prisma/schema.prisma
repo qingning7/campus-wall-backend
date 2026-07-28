@@ -28,6 +28,7 @@ model User {
   school       School?       @relation(fields: [schoolId], references: [id])
   chatMessages ChatMessage[]
   ownedRooms   Room[]
+  roomMembers  RoomMember[]
 }
 
 model School {
@@ -65,4 +66,18 @@ model Room {
   ownerId      String?
   owner        User?         @relation(fields: [ownerId], references: [id])
   chatMessages ChatMessage[]
+  members      RoomMember[]
+}
+
+model RoomMember {
+  id       String   @id @default(cuid())
+  joinedAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId])
 }
