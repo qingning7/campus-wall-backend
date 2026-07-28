@@ -150,3 +150,52 @@ authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
         data: user
     })
 })
+
+authRouter.patch(
+    "/me/school",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const { schoolId } = req.body
+
+        if (!schoolId) {
+            return res.status(400).json({
+                ok: false,
+                message: "School id is required"
+            })
+        }
+
+        const school = await prisma.school.findUnique({
+            where: {
+                id: schoolId
+            }
+        })
+
+        if (!school) {
+            return res.status(404).json({
+                ok: false,
+                message: "School not found"
+            })
+        }
+
+        const user = await prisma.user.update({
+            where: {
+                id: req.user!.id
+            },
+            data: {
+                schoolId
+            },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                schoolId: true,
+                createdAt: true
+            }
+        })
+
+        res.json({
+            ok: true,
+            data: user
+        })
+    }
+)
