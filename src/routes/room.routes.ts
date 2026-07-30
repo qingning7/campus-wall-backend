@@ -248,7 +248,7 @@ roomRouter.get(
         })
     }
 )
-// 添加消息
+// 添加消息（接入socket后可删）
 roomRouter.post(
     "/:roomId/messages",
     requireAuth,

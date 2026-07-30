@@ -6,10 +6,23 @@ import { Prisma } from "../generated/prisma/client.js"
 import { schoolRouter } from "./routes/school.routes.js"
 import { authRouter } from "./routes/auth.routes.js"
 import { roomRouter } from "./routes/room.routes.js"
+import { createServer } from "node:http"
+import { Server } from "socket.io"
+import { registerSocketHandlers } from "./socket.js"
 
 dotenv.config()
 
 const app = express()
+
+const httpServer = createServer(app)
+
+export const io = new Server(httpServer, {
+    cors: {
+        origin: "*"
+    }
+})
+
+registerSocketHandlers(io)
 
 const port = process.env.PORT || 3001
 
@@ -25,6 +38,6 @@ app.get("/api/health", async (req, res) => {
     })
 })
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
     console.log(`Server is running on port ${port}`)
 })
