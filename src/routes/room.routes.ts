@@ -66,14 +66,28 @@ roomRouter.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id
     const { name, password } = req.body
 
-    if (!name || !password) {
+    if (name && typeof name !== "string") {
         return res.status(400).json({
             ok: false,
-            message: "Room name and password are required"
+            message: "Room must be a string"
         })
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
+    if (password && typeof password !== "string") {
+        return res.status(400).json({
+            ok: false,
+            message: "Room password must be a string"
+        })
+    }
+
+    if (password && password.length < 4) {
+        return res.status(400).json({
+            ok: false,
+            message: "Room password must be at least 4 characters"
+        })
+    }
+
+    const passwordHash = password ? await bcrypt.hash(password, 10) : null
     const code = String(randomInt(100000, 1000000))
 
     try {
@@ -82,7 +96,7 @@ roomRouter.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
                 type: RoomType.PRIVATE,
                 name,
                 code,
-                passwordHash: hashedPassword,
+                passwordHash,
                 ownerId: userId,
                 members: {
                     create: {
