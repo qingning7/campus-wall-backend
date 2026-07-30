@@ -5,6 +5,7 @@ import { prisma } from "./lib/prisma.js"
 import { Prisma } from "../generated/prisma/client.js"
 import { schoolRouter } from "./routes/school.routes.js"
 import { authRouter } from "./routes/auth.routes.js"
+import { roomRouter } from "./routes/room.routes.js"
 
 dotenv.config()
 
@@ -16,7 +17,7 @@ app.use(cors())
 app.use(express.json())
 app.use("/api/schools", schoolRouter)
 app.use("/api/auth", authRouter)
-
+app.use("/api/rooms", roomRouter)
 app.get("/api/health", async (req, res) => {
     res.json({
         ok: true,

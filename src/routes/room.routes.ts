@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { prisma } from "../lib/prisma.js"
+import { Prisma } from "../../generated/prisma/client.js"
 
 import {
     requireAuth,
@@ -27,23 +28,18 @@ roomRouter.get("/mine", requireAuth, async (req: AuthenticatedRequest, res) => {
         })
     }
 
+    const orConditions: Prisma.RoomWhereInput[] = [
+        { ownerId: userId }, // 用户创建的房间
+        { members: { some: { userId }}} // 用户作为成员加入过的房间
+    ]
+
+    if (user.schoolId) {
+        orConditions.unshift({ schoolId: user.schoolId })
+    } // 如果选择过学校，学校房间也算上
+
     const rooms = await prisma.room.findMany({
         where: {
-            OR: [
-                {
-                    schoolId: user.schoolId
-                },
-                {
-                    ownerId: userId
-                },
-                {
-                    members: {
-                        some: {
-                            userId
-                        }
-                    }
-                }
-            ]
+            OR: orConditions
         },
         include: {
             school: {
