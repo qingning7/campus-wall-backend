@@ -1,6 +1,8 @@
 import { Router } from "express"
 import { prisma } from "../lib/prisma.js"
-import { Prisma } from "../../generated/prisma/client.js"
+import { Prisma, RoomType } from "../../generated/prisma/client.js"
+import bcrypt from "bcryptjs"
+import { randomInt } from "node:crypto"
 
 import {
     requireAuth,
@@ -58,4 +60,43 @@ roomRouter.get("/mine", requireAuth, async (req: AuthenticatedRequest, res) => {
         ok: true,
         data: rooms
     })
+})
+
+roomRouter.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const userId = req.user!.id
+    const { name, password } = req.body
+
+    if (!name || !password) {
+        return res.status(400).json({
+            ok: false,
+            message: "Room name and password are required"
+        })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const code = String(randomInt(100000, 1000000))
+
+    try {
+        const room = await prisma.room.create({
+            data: {
+                type: RoomType.PRIVATE,
+                name,
+                code,
+                passwordHash: hashedPassword,
+                ownerId: userId,
+                members: {
+                    create: {
+                        userId
+                    }
+                }
+            }
+        })
+
+        res.status(201).json({
+            ok: true,
+            data: room
+        })
+    } catch (error) {
+        throw error
+    }
 })
