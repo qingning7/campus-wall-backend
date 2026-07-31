@@ -81,3 +81,15 @@ model RoomMember {
 
   @@unique([userId, roomId])
 }
+
+model EmailVerificationCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String
+  purpose   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, purpose])
+}

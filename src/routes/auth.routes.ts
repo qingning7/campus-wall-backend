@@ -4,16 +4,66 @@ import { Prisma } from "../../generated/prisma/client.js"
 import { prisma } from "../lib/prisma.js"
 import jwt from "jsonwebtoken"
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth.middleware.js"
+import { randomInt } from "node:crypto"
+import { normalize } from "node:path"
 
 export const authRouter = Router()
 
-authRouter.post("/register", async (req, res) => {
-    const { email, name, password, schoolId} = req.body
+authRouter.post("/email-code", async (req, res) => {
+    const { email } = req.body
 
-    if (!email || !password) {
+    if (!email || typeof email !== "string") {
+        return res.status(400).json({
+            ok: false,
+            message: "Email is required"
+        })
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const existingUser = await prisma.user.findUnique({
+        where: {
+            email: normalizedEmail
+        },
+        select: {
+            id: true
+        }
+    })
+
+    if (existingUser) {
+        return res.status(409).json({
+            ok: false,
+            message: "Email already used"
+        })
+    }
+
+    const code = String(randomInt(1000, 10000))
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+
+    await prisma.emailVerificationCode.create({
+        data: {
+            email: normalizedEmail,
+            code,
+            purpose: "REGISTER",
+            expiresAt
+        }
+    })
+
+    res.json({
+        ok: true,
+        data: {
+            message: "Verification code generated",
+            devCode: code
+        }
+    })
+})
+
+authRouter.post("/register", async (req, res) => {
+    const { email, name, password, schoolId, emailCode} = req.body
+
+    if (!email || !password || !emailCode) {
         return res.status(400).json({
             ok:false,
-            message: "Email and password are required"
+            message: "Email, password and verification are required"
         })
     }
 
@@ -21,6 +71,27 @@ authRouter.post("/register", async (req, res) => {
         return res.status(400).json({
             ok: false,
             message: "Password must be at least 6 characters"
+        })
+    }
+    const verificationCode = await prisma.emailVerificationCode.findFirst({
+        where: {
+            email,
+            code: emailCode,
+            purpose: "REGISTER",
+            usedAt: null,
+            expiresAt: {
+                gt: new Date()
+            }
+        },
+        orderBy: {
+            createdAt: "desc"
+        }
+    })
+
+    if (!verificationCode) {
+        return res.status(400).json({
+            ok: false,
+            message: "Invalid or expired verification code"
         })
     }
 
@@ -40,6 +111,15 @@ authRouter.post("/register", async (req, res) => {
                 name: true,
                 schoolId: true,
                 createdAt: true
+            }
+        })
+
+        await prisma.emailVerificationCode.update({
+            where: {
+                id: verificationCode.id
+            },
+            data: {
+                usedAt: new Date()
             }
         })
 
