@@ -59,6 +59,7 @@ authRouter.post("/email-code", async (req, res) => {
 
 authRouter.post("/register", async (req, res) => {
     const { email, name, password, schoolId, emailCode} = req.body
+    const normalizedEmail = email.trim().toLowerCase()
 
     if (!email || !password || !emailCode) {
         return res.status(400).json({
@@ -75,7 +76,7 @@ authRouter.post("/register", async (req, res) => {
     }
     const verificationCode = await prisma.emailVerificationCode.findFirst({
         where: {
-            email,
+            email: normalizedEmail,
             code: emailCode,
             purpose: "REGISTER",
             usedAt: null,
@@ -100,7 +101,7 @@ authRouter.post("/register", async (req, res) => {
     try {
         const user = await prisma.user.create({
             data: {
-                email,
+                email: normalizedEmail,
                 name,
                 passwordHash,
                 schoolId
@@ -143,6 +144,7 @@ authRouter.post("/register", async (req, res) => {
 
 authRouter.post("/login", async (req, res) => {
     const { email, password } = req.body
+    const normalizedEmail = email.trim().toLowerCase()
 
     if (!email || !password) {
         return res.status(400).json({
@@ -153,7 +155,7 @@ authRouter.post("/login", async (req, res) => {
 
     const user = await prisma.user.findUnique({
         where: {
-            email
+            email: normalizedEmail
         }
     })
 
