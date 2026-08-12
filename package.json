@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
-    "import:schools": "tsx scripts/import-schools.ts"
+    "import:schools": "tsx scripts/import-schools.ts",
+    "create:school-rooms": "tsx scripts/create-school-rooms.ts"
   },
   "keywords": [],
   "author": "",

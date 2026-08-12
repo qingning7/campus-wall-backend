@@ -161,7 +161,16 @@ authRouter.post("/login", async (req, res) => {
             school: {
                 select: {
                     id: true,
-                    name: true
+                    name: true,
+                    room: {
+                        select: {
+                            id: true,
+                            type: true,
+                            name: true,
+                            code: true,
+                            createdAt: true
+                        }
+                    }
                 }
             }
         }
@@ -228,7 +237,16 @@ authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
             school: {
                 select: {
                     id: true,
-                    name: true
+                    name: true,
+                    room: {
+                        select: {
+                            id: true,
+                            type: true,
+                            name: true,
+                            code: true,
+                            createdAt: true
+                        }
+                    }
                 }
             },
             createdAt: true
@@ -274,6 +292,18 @@ authRouter.patch(
             })
         }
 
+        await prisma.room.upsert({
+            where: {
+                schoolId
+            },
+            update: {},
+            create: {
+                type: "SCHOOL",
+                schoolId,
+                name: school.name
+            }
+        })
+
         const user = await prisma.user.update({
             where: {
                 id: req.user!.id
@@ -289,7 +319,16 @@ authRouter.patch(
                 school: {
                     select: {
                         id: true,
-                        name: true
+                        name: true,
+                        room: {
+                            select: {
+                                id: true,
+                                type: true,
+                                name: true,
+                                code: true,
+                                createdAt: true
+                            }
+                        }
                     }
                 },
                 createdAt: true
