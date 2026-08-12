@@ -156,6 +156,23 @@ authRouter.post("/login", async (req, res) => {
     const user = await prisma.user.findUnique({
         where: {
             email: normalizedEmail
+        },
+        include: {
+            school: {
+                select: {
+                    id: true,
+                    name: true,
+                    room: {
+                        select: {
+                            id: true,
+                            type: true,
+                            name: true,
+                            code: true,
+                            createdAt: true
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -200,6 +217,7 @@ authRouter.post("/login", async (req, res) => {
                 email: user.email,
                 name: user.name,
                 schoolId: user.schoolId,
+                school: user.school,
                 createdAt: user.createdAt
             }
         }
@@ -216,6 +234,21 @@ authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
             email: true,
             name: true,
             schoolId: true,
+            school: {
+                select: {
+                    id: true,
+                    name: true,
+                    room: {
+                        select: {
+                            id: true,
+                            type: true,
+                            name: true,
+                            code: true,
+                            createdAt: true
+                        }
+                    }
+                }
+            },
             createdAt: true
         }
     })
@@ -259,6 +292,18 @@ authRouter.patch(
             })
         }
 
+        await prisma.room.upsert({
+            where: {
+                schoolId
+            },
+            update: {},
+            create: {
+                type: "SCHOOL",
+                schoolId,
+                name: school.name
+            }
+        })
+
         const user = await prisma.user.update({
             where: {
                 id: req.user!.id
@@ -271,6 +316,21 @@ authRouter.patch(
                 email: true,
                 name: true,
                 schoolId: true,
+                school: {
+                    select: {
+                        id: true,
+                        name: true,
+                        room: {
+                            select: {
+                                id: true,
+                                type: true,
+                                name: true,
+                                code: true,
+                                createdAt: true
+                            }
+                        }
+                    }
+                },
                 createdAt: true
             }
         })
