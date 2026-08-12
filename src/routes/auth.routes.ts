@@ -156,6 +156,14 @@ authRouter.post("/login", async (req, res) => {
     const user = await prisma.user.findUnique({
         where: {
             email: normalizedEmail
+        },
+        include: {
+            school: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
         }
     })
 
@@ -200,6 +208,7 @@ authRouter.post("/login", async (req, res) => {
                 email: user.email,
                 name: user.name,
                 schoolId: user.schoolId,
+                school: user.school,
                 createdAt: user.createdAt
             }
         }
@@ -216,6 +225,12 @@ authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
             email: true,
             name: true,
             schoolId: true,
+            school: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            },
             createdAt: true
         }
     })
@@ -271,6 +286,12 @@ authRouter.patch(
                 email: true,
                 name: true,
                 schoolId: true,
+                school: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
                 createdAt: true
             }
         })
