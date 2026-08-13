@@ -193,12 +193,29 @@ roomRouter.get(
             })
         }
 
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
         const room = await prisma.room.findFirst({
             where: {
                 id: roomId,
                 OR: [
                     {
-                        type: RoomType.SCHOOL
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
                     },
                     {
                         ownerId: userId
@@ -288,13 +305,13 @@ roomRouter.post(
         }
 
         const orConditions: Prisma.RoomWhereInput[] = [
+            {
+                type: RoomType.SCHOOL,
+                schoolId: user.schoolId
+            },
             { ownerId: userId },
             { members: { some: { userId } } }
         ]
-
-        if (user.schoolId) {
-            orConditions.unshift({ schoolId: user.schoolId })
-        }
 
         const room = await prisma.room.findFirst({
             where: {
