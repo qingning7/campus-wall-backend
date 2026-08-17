@@ -9,6 +9,8 @@ import { roomRouter } from "./routes/room.routes.js"
 import { createServer } from "node:http"
 import { Server } from "socket.io"
 import { registerSocketHandlers } from "./socket.js"
+import { setIo } from "./lib/realtime.js"
+import { register } from "node:module"
 
 dotenv.config()
 
@@ -21,6 +23,9 @@ export const io = new Server(httpServer, {
         origin: "*"
     }
 })
+
+setIo(io)
+registerSocketHandlers(io)
 
 registerSocketHandlers(io)
 

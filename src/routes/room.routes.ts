@@ -9,6 +9,8 @@ import {
     type AuthenticatedRequest
 } from "../middlewares/auth.middleware.js"
 
+import { getIo } from "../lib/realtime.js"
+
 export const roomRouter = Router()
 // 显示房间列表
 roomRouter.get("/mine", requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -415,6 +417,8 @@ roomRouter.post(
             }
         })
 
+        getIo().to(roomId).emit("room-message", message)
+        
         res.status(201).json({
             ok: true,
             data: message
