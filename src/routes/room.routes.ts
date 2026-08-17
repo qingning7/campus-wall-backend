@@ -179,6 +179,75 @@ roomRouter.post("/join", requireAuth, async (req: AuthenticatedRequest, res) => 
         }
     })
 })
+// 退出房间
+roomRouter.post(
+    "/:roomId/leave",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is requires\d"
+            })
+        }
+
+        const room = await prisma.room.findFirst({
+            where: {
+                id: roomId,
+                type: RoomType.PRIVATE,
+                OR: [
+                    {
+                        ownerId: userId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true,
+                ownerId: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        if (room.ownerId === userId) {
+            return res.status(400).json({
+                ok: false,
+                message: "Romm owner cannot leave room"
+            })
+        }
+
+        await prisma.roomMember.delete({
+            where: {
+                userId_roomId: {
+                    userId,
+                    roomId
+                }
+            }
+        })
+
+        res.json({
+            ok: true,
+            data: {
+                roomId
+            }
+        })
+    }
+)
 // 获取历史消息
 roomRouter.get(
     "/:roomId/messages",
