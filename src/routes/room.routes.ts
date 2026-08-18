@@ -300,6 +300,11 @@ roomRouter.delete(
                 where: {
                     roomId
                 }
+            }),
+            prisma.room.delete({
+                where: {
+                    id: roomId
+                }
             })
         ])
 
