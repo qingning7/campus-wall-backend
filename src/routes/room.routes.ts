@@ -250,6 +250,67 @@ roomRouter.post(
         })
     }
 )
+// 删除房间
+roomRouter.delete(
+    "/:roomId",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        const room = await prisma.room.findUnique({
+            where: {
+                id: roomId
+            },
+            select: {
+                id: true,
+                ownerId: true,
+                type: true
+            }
+        })
+
+        if (!room || room.type !== RoomType.PRIVATE) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        if (room.ownerId !== userId) {
+            return res.status(403).json({
+                ok: false,
+                message: "Only room owner can delete room"
+            })
+        }
+
+        await prisma.$transaction([
+            prisma.chatMessage.deleteMany({
+                where: {
+                    roomId
+                }
+            }),
+            prisma.roomMember.deleteMany({
+                where: {
+                    roomId
+                }
+            })
+        ])
+
+        res.json({
+            ok: true,
+            data: {
+                roomId
+            }
+        })
+    }
+)
 // 获取历史消息
 roomRouter.get(
     "/:roomId/messages",
