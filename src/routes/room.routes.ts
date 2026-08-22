@@ -10,6 +10,8 @@ import {
 } from "../middlewares/auth.middleware.js"
 
 import { getIo } from "../lib/realtime.js"
+import { create } from "node:domain"
+import { validateWallStrokeInput } from "../lib/wall-stroke.js"
 
 export const roomRouter = Router()
 // 显示房间列表
@@ -316,6 +318,94 @@ roomRouter.delete(
         })
     }
 )
+//获取历史笔触
+roomRouter.get(
+    "/:roomId/strokes",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findFirst({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        ownerId: userId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        const strokes = await prisma.wallStroke.findMany({
+            where: {
+                roomId
+            },
+            select: {
+                id: true,
+                color: true,
+                size: true,
+                points: true,
+                createdAt: true,
+                authorId: true,
+                roomId: true
+            },
+            orderBy: {
+                createdAt: "asc"
+            },
+            take: 500
+        })
+
+        res.json({
+            ok: true,
+            data: strokes
+        })
+    }
+)
 // 获取历史消息
 roomRouter.get(
     "/:roomId/messages",
@@ -399,6 +489,96 @@ roomRouter.get(
         res.json({
             ok: true,
             data: messages
+        })
+    }
+)
+// 添加笔触
+roomRouter.post(
+    "/:roomId/strokes",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findUnique({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        ownerId: userId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        let strokeInput
+
+        try {
+            strokeInput = validateWallStrokeInput(req.body)
+        } catch (error) {
+            return res.status(400).json({
+                ok: false,
+                message: "Invalid stroke input"
+            })
+        }
+
+        const stroke = await prisma.wallStroke.create({
+            data: {
+                roomId,
+                authorId: userId,
+                color: strokeInput.color,
+                size: strokeInput.size,
+                points: strokeInput.points
+            }
+        })
+
+        res.status(201).json({
+            ok: true,
+            data: stroke
         })
     }
 )
