@@ -576,6 +576,8 @@ roomRouter.post(
             }
         })
 
+        getIo().to(roomId).emit("room-stroke", stroke)
+
         res.status(201).json({
             ok: true,
             data: stroke
