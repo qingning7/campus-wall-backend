@@ -13,6 +13,12 @@ type AuthedSocket = Socket & {
     }
 }
 
+type StrokePoint = {
+  x: number
+  y: number
+  pressure?: number
+}
+
 export function registerSocketHandlers(io: Server) {
     io.use((socket: AuthedSocket, next) => {
         const token = socket.handshake.auth.token
@@ -99,5 +105,29 @@ export function registerSocketHandlers(io: Server) {
             socket.join(roomId)
             socket.emit("room-joined", { roomId })
         })
+
+        socket.on(
+          "room-stroke-point",
+        ({
+            roomId,
+            strokeId,
+            point,
+        }: {
+            roomId: string
+            strokeId: string
+            point: StrokePoint
+        }) => {
+        if (!socket.rooms.has(roomId)) {
+            return
+        }
+
+        socket.to(roomId).emit("room-stroke-point", {
+        roomId,
+        authorId: socket.user!.id,
+        strokeId,
+        point,
+        })
+    },
+)
     })
 }

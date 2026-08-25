@@ -566,6 +566,7 @@ roomRouter.post(
             })
         }
 
+        const strokeId = typeof req.body.strokeId === "string" ? req.body.strokeId : null;
         const stroke = await prisma.wallStroke.create({
             data: {
                 roomId,
@@ -576,11 +577,17 @@ roomRouter.post(
             }
         })
 
-        getIo().to(roomId).emit("room-stroke", stroke)
+        getIo().to(roomId).emit("room-stroke", {
+            ...stroke,
+            strokeId,
+        })
 
         res.status(201).json({
             ok: true,
-            data: stroke
+            data: {
+                ...stroke,
+                strokeId,
+            }
         })
     }
 )
