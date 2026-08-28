@@ -591,6 +591,126 @@ roomRouter.post(
         })
     }
 )
+// 删除笔触（撤销）
+roomRouter.delete(
+    "/:roomId/strokes/:strokeId",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId, strokeId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        if (!strokeId || typeof strokeId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Stroke id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findFirst({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not foubd"
+            })
+        }
+
+        const stroke = await prisma.wallStroke.findFirst({
+            where: {
+                id: strokeId,
+                roomId
+            },
+            select: {
+                authorId: true
+            }
+        })
+
+        if (!stroke) {
+            return res.status(404).json({
+                ok: false,
+                message: "Stoke not found"
+            })
+        }
+
+        if (stroke.authorId !== userId) {
+            return res.status(403).json({
+                ok: false,
+                message: "Only stroke author can delete stroke"
+            })
+        }
+
+        const deleted = await prisma.wallStroke.deleteMany({
+            where: {
+                id: strokeId,
+                roomId,
+                authorId: userId
+            }
+        })
+
+        if (deleted.count === 0) {
+            return res.status(404).json({
+                ok: false,
+                message: "Stroke not found"
+            })
+        }
+
+        getIo().to(roomId).emit("room-stroke-deleted", {
+            roomId,
+            strokeId
+        })
+
+        res.json({
+            ok: true,
+            data: {
+                roomId,
+                strokeId
+            }
+        })
+    }
+)
 // 添加消息（接入socket后可删）
 roomRouter.post(
     "/:roomId/messages",
