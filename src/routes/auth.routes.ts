@@ -59,9 +59,8 @@ authRouter.post("/email-code", async (req, res) => {
 
 authRouter.post("/register", async (req, res) => {
     const { email, name, password, schoolId, emailCode} = req.body
-    const normalizedEmail = email.trim().toLowerCase()
 
-    if (!email || !password || !emailCode) {
+    if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password || !emailCode) {
         return res.status(400).json({
             ok:false,
             message: "Email, password and verification are required"
@@ -74,6 +73,8 @@ authRouter.post("/register", async (req, res) => {
             message: "Password must be at least 6 characters"
         })
     }
+    const normalizedEmail = email.trim().toLowerCase()
+
     const verificationCode = await prisma.emailVerificationCode.findFirst({
         where: {
             email: normalizedEmail,
@@ -144,14 +145,15 @@ authRouter.post("/register", async (req, res) => {
 
 authRouter.post("/login", async (req, res) => {
     const { email, password } = req.body
-    const normalizedEmail = email.trim().toLowerCase()
 
-    if (!email || !password) {
+    if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password) {
         return res.status(400).json({
             ok: false,
             message: "Email and password are required"
         })
     }
+
+    const normalizedEmail = email.trim().toLowerCase()
 
     const user = await prisma.user.findUnique({
         where: {

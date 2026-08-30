@@ -27,8 +27,6 @@ export const io = new Server(httpServer, {
 setIo(io)
 registerSocketHandlers(io)
 
-registerSocketHandlers(io)
-
 const port = process.env.PORT || 3001
 
 app.use(cors())

@@ -27,6 +27,7 @@ model User {
   schoolId     String?
   school       School?       @relation(fields: [schoolId], references: [id])
   chatMessages ChatMessage[]
+  wallStrokes  WallStroke[]
   ownedRooms   Room[]
   roomMembers  RoomMember[]
 }
@@ -66,6 +67,7 @@ model Room {
   ownerId      String?
   owner        User?         @relation(fields: [ownerId], references: [id])
   chatMessages ChatMessage[]
+  wallStrokes  WallStroke[]
   members      RoomMember[]
 }
 
@@ -92,4 +94,22 @@ model EmailVerificationCode {
   createdAt DateTime  @default(now())
 
   @@index([email, purpose])
+}
+
+model WallStroke {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  color  String
+  size   Int
+  points Json
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id])
+
+  @@index([roomId, createdAt])
+  @@index([authorId])
 }

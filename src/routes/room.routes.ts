@@ -10,6 +10,8 @@ import {
 } from "../middlewares/auth.middleware.js"
 
 import { getIo } from "../lib/realtime.js"
+import { create } from "node:domain"
+import { validateWallStrokeInput } from "../lib/wall-stroke.js"
 
 export const roomRouter = Router()
 // 显示房间列表
@@ -316,6 +318,94 @@ roomRouter.delete(
         })
     }
 )
+//获取历史笔触
+roomRouter.get(
+    "/:roomId/strokes",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findFirst({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        ownerId: userId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        const strokes = await prisma.wallStroke.findMany({
+            where: {
+                roomId
+            },
+            select: {
+                id: true,
+                color: true,
+                size: true,
+                points: true,
+                createdAt: true,
+                authorId: true,
+                roomId: true
+            },
+            orderBy: {
+                createdAt: "asc"
+            },
+            take: 500
+        })
+
+        res.json({
+            ok: true,
+            data: strokes
+        })
+    }
+)
 // 获取历史消息
 roomRouter.get(
     "/:roomId/messages",
@@ -399,6 +489,225 @@ roomRouter.get(
         res.json({
             ok: true,
             data: messages
+        })
+    }
+)
+// 添加笔触
+roomRouter.post(
+    "/:roomId/strokes",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findUnique({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        ownerId: userId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not found"
+            })
+        }
+
+        let strokeInput
+
+        try {
+            strokeInput = validateWallStrokeInput(req.body)
+        } catch (error) {
+            return res.status(400).json({
+                ok: false,
+                message: "Invalid stroke input"
+            })
+        }
+
+        const strokeId = typeof req.body.strokeId === "string" ? req.body.strokeId : null;
+        const stroke = await prisma.wallStroke.create({
+            data: {
+                roomId,
+                authorId: userId,
+                color: strokeInput.color,
+                size: strokeInput.size,
+                points: strokeInput.points
+            }
+        })
+
+        getIo().to(roomId).emit("room-stroke", {
+            ...stroke,
+            strokeId,
+        })
+
+        res.status(201).json({
+            ok: true,
+            data: {
+                ...stroke,
+                strokeId,
+            }
+        })
+    }
+)
+// 删除笔触（撤销）
+roomRouter.delete(
+    "/:roomId/strokes/:strokeId",
+    requireAuth,
+    async (req: AuthenticatedRequest, res) => {
+        const userId = req.user!.id
+        const { roomId, strokeId } = req.params
+
+        if (!roomId || typeof roomId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Room id is required"
+            })
+        }
+
+        if (!strokeId || typeof strokeId !== "string") {
+            return res.status(400).json({
+                ok: false,
+                message: "Stroke id is required"
+            })
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: userId
+            },
+            select: {
+                schoolId: true
+            }
+        })
+
+        if (!user) {
+            return res.status(404).json({
+                ok: false,
+                message: "User not found"
+            })
+        }
+
+        const room = await prisma.room.findFirst({
+            where: {
+                id: roomId,
+                OR: [
+                    {
+                        type: RoomType.SCHOOL,
+                        schoolId: user.schoolId
+                    },
+                    {
+                        members: {
+                            some: {
+                                userId
+                            }
+                        }
+                    }
+                ]
+            },
+            select: {
+                id: true
+            }
+        })
+
+        if (!room) {
+            return res.status(404).json({
+                ok: false,
+                message: "Room not foubd"
+            })
+        }
+
+        const stroke = await prisma.wallStroke.findFirst({
+            where: {
+                id: strokeId,
+                roomId
+            },
+            select: {
+                authorId: true
+            }
+        })
+
+        if (!stroke) {
+            return res.status(404).json({
+                ok: false,
+                message: "Stoke not found"
+            })
+        }
+
+        if (stroke.authorId !== userId) {
+            return res.status(403).json({
+                ok: false,
+                message: "Only stroke author can delete stroke"
+            })
+        }
+
+        const deleted = await prisma.wallStroke.deleteMany({
+            where: {
+                id: strokeId,
+                roomId,
+                authorId: userId
+            }
+        })
+
+        if (deleted.count === 0) {
+            return res.status(404).json({
+                ok: false,
+                message: "Stroke not found"
+            })
+        }
+
+        getIo().to(roomId).emit("room-stroke-deleted", {
+            roomId,
+            strokeId
+        })
+
+        res.json({
+            ok: true,
+            data: {
+                roomId,
+                strokeId
+            }
         })
     }
 )
