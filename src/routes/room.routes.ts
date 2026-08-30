@@ -664,7 +664,8 @@ roomRouter.delete(
                 roomId
             },
             select: {
-                authorId: true
+                authorId: true,
+                points: true
             }
         })
 
@@ -699,14 +700,16 @@ roomRouter.delete(
 
         getIo().to(roomId).emit("room-stroke-deleted", {
             roomId,
-            strokeId
+            strokeId,
+            points: stroke.points
         })
 
         res.json({
             ok: true,
             data: {
                 roomId,
-                strokeId
+                strokeId,
+                points: stroke.points
             }
         })
     }
