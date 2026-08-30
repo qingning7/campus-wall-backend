@@ -654,7 +654,7 @@ roomRouter.delete(
         if (!room) {
             return res.status(404).json({
                 ok: false,
-                message: "Room not foubd"
+                message: "Room not found"
             })
         }
 
