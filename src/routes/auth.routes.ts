@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken"
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth.middleware.js"
 import { randomInt } from "node:crypto"
 import { normalize } from "node:path"
+import { sendRegistrationCode } from "../lib/email.js"
 
 export const authRouter = Router()
 
@@ -39,7 +40,7 @@ authRouter.post("/email-code", async (req, res) => {
     const code = String(randomInt(1000, 10000))
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
-    await prisma.emailVerificationCode.create({
+    const verificationCode = await prisma.emailVerificationCode.create({
         data: {
             email: normalizedEmail,
             code,
@@ -48,10 +49,25 @@ authRouter.post("/email-code", async (req, res) => {
         }
     })
 
+    try {
+        await sendRegistrationCode(normalizedEmail, code)
+    } catch {
+        await prisma.emailVerificationCode.delete({
+            where: {
+                id: verificationCode.id
+            }
+        })
+
+        return res.status(502).json({
+            ok: false,
+            message: "Failed to send verification code"
+        })
+    }
+
     res.json({
         ok: true,
         data: {
-            message: "Verification code generated",
+            message: "验证码已发送，请查看邮箱",
             devCode: code
         }
     })
