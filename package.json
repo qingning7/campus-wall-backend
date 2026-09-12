@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
     "import:schools": "tsx scripts/import-schools.ts",
-    "create:school-rooms": "tsx scripts/create-school-rooms.ts"
+    "create:school-rooms": "tsx scripts/create-school-rooms.ts",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.ts\""
   },
   "keywords": [],
   "author": "",

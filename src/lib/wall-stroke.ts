@@ -21,7 +21,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isValidColor(value: unknown): value is string {
-  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
 function isValidPoint(value: unknown): value is WallPoint {
@@ -29,7 +29,7 @@ function isValidPoint(value: unknown): value is WallPoint {
     return false;
   }
 
-  const { x, y } =value;
+  const { x, y } = value;
 
   return (
     typeof x === "number" &&
@@ -48,7 +48,7 @@ export function validateWallStrokeInput(input: unknown): WallStrokeInput {
     throw new Error("Stroke input must be an object");
   }
 
-  const candidate = input as Record<string, unknown>
+  const candidate = input as Record<string, unknown>;
   const { color, size, points } = input;
 
   if (!isValidColor(color)) {
@@ -56,8 +56,8 @@ export function validateWallStrokeInput(input: unknown): WallStrokeInput {
   }
 
   if (
-    typeof size !== "number" || 
-    !Number.isInteger(size) || 
+    typeof size !== "number" ||
+    !Number.isInteger(size) ||
     size < MIN_BRUSH_SIZE ||
     size > MAX_BRUSH_SIZE
   ) {
@@ -76,13 +76,13 @@ export function validateWallStrokeInput(input: unknown): WallStrokeInput {
     throw new Error("Stroke contains too many points");
   }
 
-   if (!points.every(isValidPoint)) {
+  if (!points.every(isValidPoint)) {
     throw new Error("Stroke points are invalid");
   }
 
   return {
     color,
     size,
-    points
+    points,
   };
 }
