@@ -373,3 +373,96 @@ authRouter.patch(
     });
   },
 );
+
+authRouter.patch(
+  "/me/password",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (
+      typeof currentPassword !== "string" ||
+      typeof newPassword !== "string" ||
+      !currentPassword ||
+      !newPassword
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "请输入当前密码和新密码",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码至少需要 6 个字符",
+      });
+    }
+
+    if (Buffer.byteLength(newPassword, "utf8") > 72) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码过长，请控制在 72 字节以内",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user!.id,
+      },
+      select: {
+        id: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "用户不存在",
+      });
+    }
+
+    const passwordMatched = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash,
+    );
+
+    if (!passwordMatched) {
+      return res.status(400).json({
+        ok: false,
+        message: "当前密码不正确",
+      });
+    }
+
+    const samePassword = await bcrypt.compare(newPassword, user.passwordHash);
+
+    if (samePassword) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码不能与当前密码相同",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordHash,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    res.json({
+      ok: true,
+      data: {
+        message: "密码修改成功",
+      },
+    });
+  },
+);
