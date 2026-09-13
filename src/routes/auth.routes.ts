@@ -9,7 +9,10 @@ import {
 } from "../middlewares/auth.middleware.js";
 import { randomInt } from "node:crypto";
 import { normalize } from "node:path";
-import { sendRegistrationCode } from "../lib/email.js";
+import {
+  sendRegistrationCode,
+  sendPasswordResetCode,
+} from "../lib/email.js";
 
 export const authRouter = Router();
 
@@ -71,7 +74,6 @@ authRouter.post("/email-code", async (req, res) => {
     ok: true,
     data: {
       message: "验证码已发送，请查看邮箱",
-      devCode: code,
     },
   });
 });
@@ -462,6 +464,216 @@ authRouter.patch(
       ok: true,
       data: {
         message: "密码修改成功",
+      },
+    });
+  },
+);
+
+authRouter.post(
+  "/me/password/email-code",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user!.id,
+      },
+      select: {
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "用户不存在",
+      });
+    }
+
+    const recentCode = await prisma.emailVerificationCode.findFirst({
+      where: {
+        email: user.email,
+        purpose: "RESET_PASSWORD",
+        createdAt: {
+          gt: new Date(Date.now() - 60 * 1000),
+        },
+      },
+    });
+
+    if (recentCode) {
+      return res.status(429).json({
+        ok: false,
+        message: "发送过于频繁，请稍后重试",
+      });
+    }
+
+    const code = String(randomInt(100000, 1000000));
+    const codeHash = await bcrypt.hash(code, 10);
+
+    const verificationCode = await prisma.emailVerificationCode.create({
+      data: {
+        email: user.email,
+        code: codeHash,
+        purpose: "RESET_PASSWORD",
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    try {
+      await sendPasswordResetCode(user.email, code);
+    } catch {
+      await prisma.emailVerificationCode.delete({
+        where: {
+          id: verificationCode.id,
+        },
+      });
+
+      return res.status(502).json({
+        ok: false,
+        message: "验证码邮件发送失败，请稍后重试",
+      });
+    }
+
+    res.json({
+      ok: true,
+      data: {
+        message: "验证码已发送，请查看绑定邮箱",
+      },
+    });
+  },
+);
+
+authRouter.patch(
+  "/me/password/reset",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    const { emailCode, newPassword } = req.body ?? {};
+
+    if (
+      typeof emailCode !== "string" ||
+      !/^\d{6}$/.test(emailCode.trim())
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "请输入六位数字验证码",
+      });
+    }
+
+    if (
+      typeof newPassword !== "string" ||
+      newPassword.length < 6
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码至少需要 6 个字符",
+      });
+    }
+
+    if (Buffer.byteLength(newPassword, "utf8") > 72) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码过长",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "用户不存在",
+      });
+    }
+
+    const verificationCode = await prisma.emailVerificationCode.findFirst({
+      where: {
+        email: user.email,
+        purpose: "RESET_PASSWORD",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (
+      !verificationCode ||
+      verificationCode.usedAt !== null ||
+      verificationCode.expiresAt <= new Date()
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "验证码已失效，请重新获取",
+      });
+    }
+
+    const codeMatched = await bcrypt.compare(
+      emailCode.trim(),
+      verificationCode.code,
+    );
+
+    if (!codeMatched) {
+      return res.status(400).json({
+        ok: false,
+        message: "验证码不正确",
+      });
+    }
+
+    const samePassword = await bcrypt.compare(
+      newPassword,
+      user.passwordHash,
+    );
+
+    if (samePassword) {
+      return res.status(400).json({
+        ok: false,
+        message: "新密码不能与当前密码相同",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const consumed = await tx.emailVerificationCode.updateMany({
+        where: {
+          id: verificationCode.id,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: {
+          usedAt: new Date(),
+        },
+      });
+
+      if (consumed.count !== 1) {
+        return false;
+      }
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+        select: { id: true },
+      });
+
+      return true;
+    });
+
+    if (!updated) {
+      return res.status(400).json({
+        ok: false,
+        message: "验证码已失效，请重新获取",
+      });
+    }
+
+    res.json({
+      ok: true,
+      data: {
+        message: "密码重置成功",
       },
     });
   },
