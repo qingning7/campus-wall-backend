@@ -297,6 +297,11 @@ roomRouter.delete(
     }
 
     await prisma.$transaction([
+      prisma.wallStroke.deleteMany({
+        where: {
+          roomId,
+        },
+      }),
       prisma.chatMessage.deleteMany({
         where: {
           roomId,
