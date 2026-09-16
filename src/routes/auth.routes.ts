@@ -43,15 +43,32 @@ authRouter.post("/email-code", async (req, res) => {
     });
   }
 
+  const recentCode = await prisma.emailVerificationCode.findFirst({
+    where: {
+      email: normalizedEmail,
+      purpose: "REGISTER",
+      createdAt: {
+        gt: new Date(Date.now() - 60 * 1000),
+      },
+    },
+  });
+
+  if (recentCode) {
+    return res.status(429).json({
+      ok: false,
+      message: "发送过于频繁，请稍后重试",
+    });
+  }
+
   const code = String(randomInt(1000, 10000));
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const codeHash = await bcrypt.hash(code, 10);
 
   const verificationCode = await prisma.emailVerificationCode.create({
     data: {
       email: normalizedEmail,
-      code,
+      code: codeHash,
       purpose: "REGISTER",
-      expiresAt,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     },
   });
 
@@ -86,7 +103,8 @@ authRouter.post("/register", async (req, res) => {
     typeof password !== "string" ||
     !email.trim() ||
     !password ||
-    !emailCode
+    typeof emailCode !== "string" ||
+    !/^\d{4}$/.test(emailCode.trim())
   ) {
     return res.status(400).json({
       ok: false,
@@ -105,19 +123,30 @@ authRouter.post("/register", async (req, res) => {
   const verificationCode = await prisma.emailVerificationCode.findFirst({
     where: {
       email: normalizedEmail,
-      code: emailCode,
       purpose: "REGISTER",
-      usedAt: null,
-      expiresAt: {
-        gt: new Date(),
-      },
     },
     orderBy: {
       createdAt: "desc",
     },
   });
 
-  if (!verificationCode) {
+  if (
+    !verificationCode ||
+    verificationCode.usedAt !== null ||
+    verificationCode.expiresAt <= new Date()
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: "Invalid or expired verification code",
+    });
+  }
+
+  const codeMatched = await bcrypt.compare(
+    emailCode.trim(),
+    verificationCode.code,
+  );
+
+  if (!codeMatched) {
     return res.status(400).json({
       ok: false,
       message: "Invalid or expired verification code",
@@ -127,30 +156,45 @@ authRouter.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
 
   try {
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        name,
-        passwordHash,
-        schoolId,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        schoolId: true,
-        createdAt: true,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const consumed = await tx.emailVerificationCode.updateMany({
+        where: {
+          id: verificationCode.id,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: {
+          usedAt: new Date(),
+        },
+      });
+
+      if (consumed.count !== 1) {
+        return null;
+      }
+
+      return tx.user.create({
+        data: {
+          email: normalizedEmail,
+          name,
+          passwordHash,
+          schoolId,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          schoolId: true,
+          createdAt: true,
+        },
+      });
     });
 
-    await prisma.emailVerificationCode.update({
-      where: {
-        id: verificationCode.id,
-      },
-      data: {
-        usedAt: new Date(),
-      },
-    });
+    if (!user) {
+      return res.status(400).json({
+        ok: false,
+        message: "Invalid or expired verification code",
+      });
+    }
 
     res.status(201).json({
       ok: true,
