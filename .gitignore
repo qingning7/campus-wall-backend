@@ -7,3 +7,6 @@ node_modules
 *.design.md
 
 /data
+
+# Generated deployment bundles
+/deployment/*.tar.gz

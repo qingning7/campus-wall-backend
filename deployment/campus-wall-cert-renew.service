@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Campus Wall TLS certificate
+Wants=network-online.target
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --cert-name campus-wall.me --quiet

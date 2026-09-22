@@ -1,0 +1,19 @@
+[Unit]
+Description=Campus Wall backend
+Wants=network-online.target
+After=network-online.target postgresql-16.service
+
+[Service]
+Type=simple
+User=campuswall
+Group=campuswall
+WorkingDirectory=/opt/campus-wall/backend
+Environment=NODE_ENV=production
+Environment=PATH=/opt/nodejs/node-v22.23.2-linux-x64/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/nodejs/node-v22.23.2-linux-x64/bin/node --import tsx src/server.ts
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
