@@ -1,0 +1,102 @@
+name: Backend checks and deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: campus_ci
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: campus_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U campus_ci -d campus_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://campus_ci:ci_only_password@127.0.0.1:5432/campus_ci
+      JWT_SECRET: ci-only-not-a-production-secret
+      SMTP_HOST: localhost
+      SMTP_PORT: '465'
+      SMTP_USER: ci@example.invalid
+      SMTP_PASS: ci-only
+      PORT: '3001'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check deployment rollback behavior
+        run: python3 deployment/test_deploy.py
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.23.2'
+          cache: npm
+      - run: npm ci --include=dev
+      - run: npx --no-install prisma validate
+      - run: npx --no-install prisma generate
+      - run: npx --no-install tsc --noEmit
+      - run: npx --no-install prisma migrate deploy
+      - name: Check API and database connection
+        run: bash deployment/ci-smoke-test.sh
+      - name: Package tracked source only
+        run: git archive --format=tar.gz --output=backend.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend
+          path: backend.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_AUTO_DEPLOY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Reject a superseded commit
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend
+      - name: Upload and deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SSH_PRIVATE_KEY:?Missing DEPLOY_SSH_KEY}"
+          : "${SSH_KNOWN_HOSTS:?Missing DEPLOY_KNOWN_HOSTS}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          release="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          target="campusdeploy@$DEPLOY_HOST"
+          opts=(-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+          scp "${opts[@]}" backend.tar.gz "$target:/opt/campus-wall/deploy/incoming/backend-$release.tar.gz"
+          ssh "${opts[@]}" "$target" "/usr/local/bin/campus-wall-deploy backend $release"

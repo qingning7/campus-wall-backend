@@ -2,3 +2,4 @@ deployment/*.sh text eol=lf
 deployment/*.conf text eol=lf
 deployment/*.service text eol=lf
 deployment/*.timer text eol=lf
+.github/workflows/*.yml text eol=lf

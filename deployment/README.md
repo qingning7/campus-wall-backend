@@ -1,6 +1,6 @@
 # Campus Wall 部署配置
 
-这些文件记录 Alibaba Cloud Linux 3 上的单机部署方式，供维护和重建环境使用。提交到 GitHub 不会自动更新服务器；目前尚未配置 GitHub Actions。
+这些文件记录 Alibaba Cloud Linux 3 上的单机部署方式，供维护和重建环境使用。GitHub Actions 配置和首次启用步骤见 [自动部署指南](AUTO-DEPLOY.md)；完成服务器初始化、Secrets 和开关配置前，只运行检查，不自动更新服务器。
 
 | 文件 | 用途 |
 | --- | --- |
