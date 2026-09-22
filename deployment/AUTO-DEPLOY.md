@@ -74,6 +74,8 @@ bash setup-actions.sh /home/admin/campus-wall-actions-setup/campus-wall-actions.
 
 初始化会保存 Nginx 配置备份，并创建 `/etc/systemd/system/campus-wall-backend.service.d/20-actions.conf`。如果中途失败，保留报错，不要反复运行初始化脚本。
 
+父目录 `/opt/campus-wall` 如果是 `campuswall:campuswall`、权限 `700`，初始化会仅增加组的通行权限（`g+x`），不递归修改目录内容。对于旧脚本在创建 `backend/current` 时因权限不足退出的情况，核实两个 `current` 链接均未创建、sudoers 和 systemd 覆盖配置均未安装后，可以使用新版脚本的 `--resume-before-links` 参数继续；它会校验已有账号、目录、公钥和共享 `.env`，不会重新创建账号或覆盖 `.env`。此参数不适用于其他失败阶段。
+
 初始化后的 `.env` 维护：首次初始化仅复制旧文件。第一次自动发布前，如果修改原目录的 `.env`，需要同步修改新的共享文件；自动发布成功后只维护共享文件，并重启后端。
 
 在本机 Windows CMD 验证 SSH（首次提示主机身份时先与控制台公钥指纹核对）：

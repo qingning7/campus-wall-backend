@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # One-time root setup; invoke with the path to the deployment PUBLIC key.
 set -euo pipefail
-[[ $EUID == 0 && $# == 1 ]] || { echo 'Usage: sudo bash setup-actions.sh /path/to/deploy-key.pub'; exit 1; }
+[[ $EUID == 0 && ( $# == 1 || $# == 2 ) ]] || { echo 'Usage: sudo bash setup-actions.sh /path/to/deploy-key.pub [--resume-before-links]'; exit 1; }
+resume=false
+if [[ $# == 2 ]]; then
+    [[ $2 == --resume-before-links ]] || exit 1
+    resume=true
+fi
 key=$(readlink -f "$1")
 scripts=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 base=/opt/campus-wall/deploy
@@ -11,8 +16,10 @@ test -f "$key"
 ssh-keygen -lf "$key"
 grep -q '^ssh-ed25519 ' "$key"
 [[ $(wc -l < "$key") -eq 1 ]]
-test ! -e "$base"
-test ! -e "$web"
+if [[ $resume == false ]]; then
+    test ! -e "$base"
+    test ! -e "$web"
+fi
 test ! -e "$override"
 test ! -e /etc/sudoers.d/campus-wall-deploy
 test -f /opt/campus-wall/backend/.env
@@ -22,7 +29,7 @@ if command -v getenforce > /dev/null && [[ $(getenforce) == Enforcing ]]; then
     exit 1
 fi
 id campuswall > /dev/null
-if id campusdeploy > /dev/null 2>&1; then
+if [[ $resume == false ]] && id campusdeploy > /dev/null 2>&1; then
     echo 'campusdeploy already exists; inspect its configuration before running setup.' >&2
     exit 1
 fi
@@ -38,15 +45,38 @@ grep -Eq '^[[:space:]]*root[[:space:]]+/var/www/campus-wall;' /etc/nginx/nginx.c
 curl --fail --silent --show-error --max-time 10 \
     --resolve campus-wall.me:443:127.0.0.1 https://campus-wall.me/ > /dev/null
 
-useradd --create-home --shell /bin/bash --groups campuswall campusdeploy
-install -d -o campusdeploy -g campusdeploy -m 700 /home/campusdeploy/.ssh
-{ printf 'restrict '; cat "$key"; } > /home/campusdeploy/.ssh/authorized_keys
-chown campusdeploy:campusdeploy /home/campusdeploy/.ssh/authorized_keys
-chmod 600 /home/campusdeploy/.ssh/authorized_keys
-install -d -o campusdeploy -g campuswall -m 750 "$base" "$base/backend" "$base/backend/releases" "$base/incoming"
-install -d -o root -g campuswall -m 750 "$base/shared"
-install -o root -g campuswall -m 640 /opt/campus-wall/backend/.env "$base/shared/.env"
-install -d -o campusdeploy -g campusdeploy -m 755 "$web" "$web/releases"
+# Resume only the known partial state that stopped before either link was created.
+if [[ $resume == true ]]; then
+    id -nG campusdeploy | tr ' ' '\n' | grep -Fxq campuswall
+    for directory in "$base" "$base/backend" "$base/backend/releases" "$base/incoming" "$web" "$web/releases"; do
+        test -d "$directory"
+        test ! -L "$directory"
+        [[ $(stat -c %U "$directory") == campusdeploy ]]
+    done
+    test -f "$base/shared/.env"
+    [[ $(stat -c '%U:%G:%a' "$base/shared/.env") == root:campuswall:640 ]]
+    { printf 'restrict '; cat "$key"; } | cmp - /home/campusdeploy/.ssh/authorized_keys
+    for link in "$base/backend/current" "$web/current"; do
+        test ! -e "$link"
+        test ! -L "$link"
+    done
+fi
+# The original parent can be campuswall:campuswall 700. Permit group traversal
+# without granting group listing/write access or changing descendants.
+[[ $(stat -c %G /opt/campus-wall) == campuswall ]] || { echo '/opt/campus-wall must belong to group campuswall; inspect permissions first.' >&2; exit 1; }
+chmod g+x /opt/campus-wall
+if [[ $resume == false ]]; then
+    useradd --create-home --shell /bin/bash --groups campuswall campusdeploy
+    install -d -o campusdeploy -g campusdeploy -m 700 /home/campusdeploy/.ssh
+    { printf 'restrict '; cat "$key"; } > /home/campusdeploy/.ssh/authorized_keys
+    chown campusdeploy:campusdeploy /home/campusdeploy/.ssh/authorized_keys
+    chmod 600 /home/campusdeploy/.ssh/authorized_keys
+    install -d -o campusdeploy -g campuswall -m 750 "$base" "$base/backend" "$base/backend/releases" "$base/incoming"
+    install -d -o root -g campuswall -m 750 "$base/shared"
+    install -o root -g campuswall -m 640 /opt/campus-wall/backend/.env "$base/shared/.env"
+    install -d -o campusdeploy -g campusdeploy -m 755 "$web" "$web/releases"
+fi
+runuser -u campusdeploy -- test -x /opt/campus-wall
 runuser -u campusdeploy -- ln -s /opt/campus-wall/backend "$base/backend/current"
 runuser -u campusdeploy -- ln -s /var/www/campus-wall "$web/current"
 install -o root -g root -m 755 "$scripts/campus-wall-deploy.sh" /usr/local/bin/campus-wall-deploy
