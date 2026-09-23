@@ -51,6 +51,7 @@ jobs:
       - run: npx --no-install prisma validate
       - run: npx --no-install prisma generate
       - run: npx --no-install tsc --noEmit
+      - run: npm test
       - run: npx --no-install prisma migrate deploy
       - name: Check API and database connection
         run: bash deployment/ci-smoke-test.sh

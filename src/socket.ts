@@ -20,7 +20,7 @@ type StrokePoint = {
 };
 
 export function registerSocketHandlers(io: Server) {
-  io.use((socket: AuthedSocket, next) => {
+  io.use(async (socket: AuthedSocket, next) => {
     const token = socket.handshake.auth.token;
 
     if (!token || typeof token !== "string") {
@@ -35,6 +35,15 @@ export function registerSocketHandlers(io: Server) {
 
     try {
       const payload = jwt.verify(token, jwtSecret) as JwtPayload;
+      if (
+        typeof payload.userId !== "string" ||
+        !(await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { id: true },
+        }))
+      ) {
+        return next(new Error("Account no longer exists"));
+      }
 
       socket.user = {
         id: payload.userId,
@@ -90,6 +99,7 @@ export function registerSocketHandlers(io: Server) {
   }
 
   io.on("connection", (socket: AuthedSocket) => {
+    socket.join(`user:${socket.user!.id}`);
     console.log(`Socket connected: ${socket.id}, user: ${socket.user!.id}`);
 
     socket.on("join-room", async ({ roomId }: { roomId: string }) => {

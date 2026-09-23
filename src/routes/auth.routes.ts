@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { configuredAdminIds } from "../lib/admin-policy.js";
 import bcrypt from "bcryptjs";
 import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
@@ -9,10 +10,7 @@ import {
 } from "../middlewares/auth.middleware.js";
 import { randomInt } from "node:crypto";
 import { normalize } from "node:path";
-import {
-  sendRegistrationCode,
-  sendPasswordResetCode,
-} from "../lib/email.js";
+import { sendRegistrationCode, sendPasswordResetCode } from "../lib/email.js";
 
 export const authRouter = Router();
 
@@ -292,6 +290,7 @@ authRouter.post("/login", async (req, res) => {
       token,
       user: {
         id: user.id,
+        isAdmin: configuredAdminIds().includes(user.id),
         email: user.email,
         name: user.name,
         schoolId: user.schoolId,
@@ -340,7 +339,7 @@ authRouter.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
 
   res.json({
     ok: true,
-    data: user,
+    data: { ...user, isAdmin: configuredAdminIds().includes(user.id) },
   });
 });
 
@@ -415,7 +414,7 @@ authRouter.patch(
 
     res.json({
       ok: true,
-      data: user,
+      data: { ...user, isAdmin: configuredAdminIds().includes(user.id) },
     });
   },
 );
@@ -592,20 +591,14 @@ authRouter.patch(
   async (req: AuthenticatedRequest, res) => {
     const { emailCode, newPassword } = req.body ?? {};
 
-    if (
-      typeof emailCode !== "string" ||
-      !/^\d{6}$/.test(emailCode.trim())
-    ) {
+    if (typeof emailCode !== "string" || !/^\d{6}$/.test(emailCode.trim())) {
       return res.status(400).json({
         ok: false,
         message: "请输入六位数字验证码",
       });
     }
 
-    if (
-      typeof newPassword !== "string" ||
-      newPassword.length < 6
-    ) {
+    if (typeof newPassword !== "string" || newPassword.length < 6) {
       return res.status(400).json({
         ok: false,
         message: "新密码至少需要 6 个字符",
@@ -668,10 +661,7 @@ authRouter.patch(
       });
     }
 
-    const samePassword = await bcrypt.compare(
-      newPassword,
-      user.passwordHash,
-    );
+    const samePassword = await bcrypt.compare(newPassword, user.passwordHash);
 
     if (samePassword) {
       return res.status(400).json({

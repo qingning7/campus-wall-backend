@@ -11,6 +11,7 @@ import { Server } from "socket.io";
 import { registerSocketHandlers } from "./socket.js";
 import { setIo } from "./lib/realtime.js";
 import { register } from "node:module";
+import { createAdminRouter } from "./routes/admin.routes.js";
 
 dotenv.config();
 
@@ -34,6 +35,20 @@ app.use(express.json());
 app.use("/api/schools", schoolRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/rooms", roomRouter);
+app.use(
+  "/api/admin",
+  createAdminRouter({
+    db: prisma,
+    realtime: {
+      emitRoom: (roomId, event, payload) => {
+        io.to(roomId).emit(event, payload);
+      },
+      disconnectUser: (userId) => {
+        io.in(`user:${userId}`).disconnectSockets(true);
+      },
+    },
+  }),
+);
 app.get("/api/health", async (req, res) => {
   res.json({
     ok: true,
