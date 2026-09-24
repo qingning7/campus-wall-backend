@@ -489,15 +489,13 @@ roomRouter.get(
           },
         },
       },
-      orderBy: {
-        createdAt: "asc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 50,
     });
 
     res.json({
       ok: true,
-      data: messages,
+      data: messages.reverse(),
     });
   },
 );
